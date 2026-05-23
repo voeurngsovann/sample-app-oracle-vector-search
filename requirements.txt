@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Oracle 26ai Vector Search App  •  Python 3.14 / Windows
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Web UI
+streamlit>=1.45.0
+
+# Oracle driver — 2.4.0 is the latest with a Windows cp314 wheel
+oracledb>=2.4.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# PDF extraction
+pymupdf>=1.27.2.3
+
+# DOCX extraction
+python-docx>=1.1.0
+
+# ── LLM providers ─────────────────────────────
+# Ollama: called via stdlib urllib — no package needed
+# Gemini: REST fallback uses stdlib urllib too.
+#         Install the SDK only if you want richer error messages / streaming:
+google-genai>=1.0.0

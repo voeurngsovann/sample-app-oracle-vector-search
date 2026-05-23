@@ -1,0 +1,538 @@
+# 🗄️ Oracle Database 26ai Setup Guide
+
+Complete step-by-step guide to prepare Oracle Database 26ai for the Vector Search application.
+
+---
+
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Connect to Oracle Database](#connect-to-oracle-database)
+3. [Create DEV User](#create-dev-user)
+4. [Grant Privileges](#grant-privileges)
+5. [Verify ONNX Model](#verify-onnx-model)
+6. [Create Application Users](#create-application-users)
+7. [Verify Setup](#verify-setup)
+8. [Troubleshooting](#troubleshooting)
+
+---
+
+## Prerequisites
+
+- **Oracle Database 26ai** (23ai or later)
+- **SYSDBA or SYSTEM** user access
+- **SQL*Plus** or **SQLcl** (command-line tools)
+- Basic SQL knowledge
+
+---
+
+## Connect to Oracle Database
+
+### Using SQL*Plus
+
+**Windows:**
+```cmd
+sqlplus system@DEVPDB
+```
+
+**Linux/macOS:**
+```bash
+sqlplus system@DEVPDB
+```
+
+You'll be prompted for a password. Enter your SYSTEM user password.
+
+### Using SQLcl (Modern Alternative)
+
+```cmd
+sql system@DEVPDB
+```
+
+**Note:** If you're connecting to a remote database:
+
+```cmd
+sqlplus system@hostname:1521/DEVPDB
+sqlplus system@hostname:1521:DEVPDB
+```
+
+---
+
+## Create DEV User
+
+Once connected as SYSTEM, run:
+
+```sql
+-- ═══════════════════════════════════════════════════════════════
+-- Create DEV user for vector search application
+-- ═══════════════════════════════════════════════════════════════
+
+-- 1. Create user with secure password
+CREATE USER dev IDENTIFIED BY YourSecurePassword123!;
+
+-- 2. Grant basic privileges
+GRANT CONNECT TO dev;
+GRANT RESOURCE TO dev;
+GRANT CREATE TABLE TO dev;
+GRANT CREATE PROCEDURE TO dev;
+GRANT CREATE FUNCTION TO dev;
+
+-- 3. Grant tablespace quota (for storing documents and embeddings)
+ALTER USER dev QUOTA UNLIMITED ON USERS;
+
+-- 4. Grant vector-related privileges (Oracle 26ai)
+GRANT EXECUTE ON SYS.VECTOR_EMBEDDING TO dev;
+
+-- 5. Commit changes
+COMMIT;
+
+-- 6. Verify user creation
+SELECT username, account_status FROM dba_users WHERE username = 'DEV';
+```
+
+**Output should be:**
+```
+USERNAME                       ACCOUNT_STATUS
+------------------------------ --------
+DEV                            OPEN
+```
+
+---
+
+## Grant Privileges
+
+Grant additional privileges needed by the application:
+
+```sql
+-- Connect as SYSTEM user
+CONNECT system@DEVPDB;
+
+-- ═══════════════════════════════════════════════════════════════
+-- Grant Application Privileges to DEV
+-- ═══════════════════════════════════════════════════════════════
+
+-- 1. Vector search privileges
+GRANT EXECUTE ON SYS.VECTOR_EMBEDDING TO dev;
+
+-- 2. Database metadata access (optional, for monitoring)
+GRANT SELECT ON dba_tables TO dev;
+GRANT SELECT ON dba_indexes TO dev;
+
+-- 3. Session privileges
+GRANT ALTER SESSION TO dev;
+
+-- 4. DDL privileges (for auto-creating tables)
+GRANT CREATE TABLE TO dev;
+GRANT CREATE INDEX TO dev;
+GRANT CREATE SEQUENCE TO dev;
+
+COMMIT;
+```
+
+---
+
+## Verify ONNX Model
+
+Check if the embedding model is available if it is not  download from  below 
+
+https://adwc4pm.objectstorage.us-ashburn-1.oci.customer-oci.com/p/TtH6hL2y25EypZ0-rrczRZ1aXp7v1ONbRBfCiT-BDBN8WLKQ3lgyW6RxCfIFLdA6/n/adwc4pm/b/OML-ai-models/o/all_MiniLM_L12_v2_augmented.zip
+
+mkdir -p /u01/models
+cd /u01/models
+unzip -oq all_MiniLM_L12_v2_augmented.zip
+create or replace directory model_dir as '/u01/models';
+grant read, write on directory model_dir to dev;
+
+```sql
+-- Connect as system user  load the model into the database using the DBMS_VECTOR package.
+CONNECT system@DEVPDB; 
+
+begin
+  dbms_vector.drop_onnx_model (
+    model_name => 'ALL_MINILM_L12_V2',
+    force => true);
+
+  dbms_vector.load_onnx_model (
+    directory  => 'model_dir',
+    file_name  => 'all_MiniLM_L12_v2.onnx',
+    model_name => 'ALL_MINILM_L12_V2');
+end;
+/
+
+-- Check available models
+SQL> select MODEL_NAME FROM user_mining_models;
+
+```
+
+**Expected output:**
+```
+SQL> set linesize 300
+
+MODEL_NAME                MODEL_SIZE CREATION_
+-------------------------------------------- ----
+ALL_MINILM_L12_V2         133322334 30-APR-26
+
+
+```
+
+### If Model Not Found
+
+The application will attempt to create/load it automatically on first run. However, if you want to pre-load it:
+
+```sql
+-- This command depends on your Oracle setup
+-- The model binary must be available in the database
+-- Contact your DBA if the model isn't available
+
+-- Check system-wide models
+select ALGORITHM,MODEL_NAME,MINING_FUNCTION from all_mining_models;
+
+
+-- If using a different model (optional)
+-- Adjust .env variable: ORA_ONNX_MODEL=<your_model_name>
+```
+
+---
+
+## Create Application Users
+
+The Streamlit application needs at least one user to log in. The app auto-creates these tables, but you can pre-populate:
+
+```sql
+-- Connect as DEV user
+CONNECT dev@DEVPDB;
+
+-- ═══════════════════════════════════════════════════════════════
+-- Create Application Users Table (optional - app does this too)
+-- ═══════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS VS_APP_USERS (
+    id NUMBER GENERATED BY DEFAULT AS IDENTITY,
+    username VARCHAR2(100) NOT NULL UNIQUE,
+    password_hash VARCHAR2(256) NOT NULL,
+    full_name VARCHAR2(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+-- ═══════════════════════════════════════════════════════════════
+-- Insert Default Admin User (PBKDF2-SHA256 hashed)
+-- ═══════════════════════════════════════════════════════════════
+
+-- Password: 'admin' (hashed with PBKDF2-SHA256, 100000 iterations)
+-- You should change this after first login via the app UI
+
+INSERT INTO app_users (username, password_hash, full_name)
+VALUES (
+    'admin',
+    '6A45F1EBF2A43C1FB0F3E0F0C34B3D6E9E8F7A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8A9B0C1D2',
+    'Administrator'
+);
+
+COMMIT;
+
+-- Verify
+SELECT username, full_name FROM app_users;
+```
+
+---
+
+## Verify Setup
+
+Run these checks to confirm everything is configured:
+
+### 1. Check DEV User Exists
+
+```sql
+SELECT username, account_status, created FROM dba_users WHERE username = 'DEV';
+```
+
+### 2. Check Privileges
+
+```sql
+SELECT privilege FROM dba_sys_privs WHERE grantee = 'DEV' AND privilege LIKE '%VECTOR%';
+```
+
+### 3. Check ONNX Model
+
+```sql
+CONNECT dev@DEVPDB;
+SELECT model_name FROM user_mining_models WHERE model_type = 'ONNX Embedding Model';
+```
+
+### 4. Test Vector Embedding
+
+```sql
+-- As DEV user
+SELECT VECTOR_EMBEDDING(ALL_MINILM_L12_V2 USING 'hello world' AS data) AS vec FROM dual;
+```
+
+Should return a vector representation (long number string).
+
+### 5. Check Tablespace Quota
+
+```sql
+SELECT username, tablespace_name, max_bytes FROM dba_ts_quotas WHERE username = 'DEV';
+```
+
+Should show sufficient quota (or UNLIMITED).
+
+---
+
+## First Run with Application
+
+When you run the Streamlit app for the first time with `.env` configured:
+
+```bash
+streamlit run app.py
+```
+
+The app will **automatically:**
+
+1. ✅ Connect to Oracle as DEV user
+2. ✅ Create `APP_USERS` table if missing
+3. ✅ Create `AITEST_DOCUMENTATION_TAB` table
+4. ✅ Create `AITEST_DOCUMENTATION_CHUNKS` table
+5. ✅ Create HNSW vector index
+6. ✅ Insert default admin user if needed
+
+**Check app.log for creation logs:**
+
+```bash
+tail -f app.log
+```
+
+---
+
+## .env Configuration
+
+Once your Oracle user is ready, configure `.env`:
+
+```ini
+# ──────────────────────────────────────────────────────────
+# ORACLE DATABASE CONNECTION
+# ──────────────────────────────────────────────────────────
+
+# User created in Step 1
+ORA_USER=dev
+ORA_PASSWORD=YourSecurePassword123!
+
+# Database location
+ORA_HOST=localhost              # or your server IP
+ORA_PORT=1521                   # default Oracle port
+ORA_SERVICE=DEVPDB              # your service name
+
+# Schema and table names (will be auto-created)
+ORA_SCHEMA=DEV
+ORA_DOC_TABLE=AITEST_DOCUMENTATION_TAB
+ORA_CHUNK_TABLE=AITEST_DOCUMENTATION_CHUNKS
+ORA_ONNX_MODEL=ALL_MINILM_L12_V2
+
+# ──────────────────────────────────────────────────────────
+# VECTOR SEARCH SETTINGS
+# ──────────────────────────────────────────────────────────
+
+VECTOR_TOP_K=5                  # number of results
+VECTOR_DISTANCE=COSINE          # COSINE | DOT | EUCLIDEAN
+
+# ──────────────────────────────────────────────────────────
+# LLM PROVIDER (optional for RAG mode)
+# ──────────────────────────────────────────────────────────
+
+LLM_PROVIDER=ollama
+```
+
+---
+
+## Troubleshooting
+
+### Error: `ORA-01017: invalid username/password`
+
+**Cause:** Incorrect credentials or user doesn't exist.
+
+**Solution:**
+```sql
+-- As SYSTEM user, verify user exists:
+SELECT username FROM dba_users WHERE username = 'DEV';
+
+-- Reset password if needed:
+ALTER USER dev IDENTIFIED BY NewPassword123!;
+```
+
+### Error: `ORA-00942: table or view does not exist`
+
+**Cause:** User doesn't have CREATE TABLE privilege.
+
+**Solution:**
+```sql
+-- As SYSTEM user:
+GRANT CREATE TABLE TO dev;
+ALTER USER dev QUOTA UNLIMITED ON USERS;
+```
+
+### Error: `ORA-06553: PLS-306: wrong number or types of arguments`
+
+**Cause:** VECTOR_EMBEDDING function not accessible or wrong syntax.
+
+**Solution:**
+```sql
+-- Verify privilege:
+SELECT * FROM dba_sys_privs WHERE grantee = 'DEV' AND privilege LIKE '%VECTOR%';
+
+-- Re-grant:
+GRANT EXECUTE ON SYS.VECTOR_EMBEDDING TO dev;
+
+-- Test syntax:
+CONNECT dev@DEVPDB;
+SELECT VECTOR_EMBEDDING(ALL_MINILM_L12_V2 USING 'test' AS data) FROM dual;
+```
+
+### Error: `ORA-04065: not executed, altered or dropped`
+
+**Cause:** ONNX model not found or not properly loaded.
+
+**Solution:**
+```sql
+-- Check available models:
+SELECT model_name FROM user_mining_models;
+
+-- If empty, the model needs to be pre-loaded by your DBA
+-- Or adjust ORA_ONNX_MODEL in .env to an available model
+```
+
+### Error: `ORA-01950: no privileges on tablespace 'USERS'`
+
+**Cause:** User quota exceeded or not granted.
+
+**Solution:**
+```sql
+-- As SYSTEM user:
+ALTER USER dev QUOTA UNLIMITED ON USERS;
+```
+
+### Connection Timeout
+
+**Cause:** Network or database availability issues.
+
+**Solution:**
+```bash
+# Test connection with sqlplus
+sqlplus -V                          # verify install
+sqlplus system@DEVPDB              # test connection
+# If failed, check:
+# 1. Database is running
+# 2. Hostname/port are correct
+# 3. Firewall allows port 1521
+# 4. Listener is active: lsnrctl status
+```
+
+---
+
+## Security Best Practices
+
+### 1. Change Default Admin Password
+
+After first login to the app:
+- Log in as `admin` / `admin`
+- Go to sidebar and change your password
+- Or via SQL: Update password_hash in app_users table
+
+### 2. Use Strong Passwords
+
+```sql
+-- When creating users
+CREATE USER dev IDENTIFIED BY "YourVerySecurePassword123!@#$";
+
+-- Requirements:
+-- At least 12 characters
+-- Mix of uppercase, lowercase, numbers, special chars
+-- Don't use dictionary words
+```
+
+### 3. Restrict DEV User Access
+
+```sql
+-- Limit connections (optional)
+ALTER SYSTEM SET sessions_per_user=10 SCOPE=BOTH;
+
+-- Audit queries (optional)
+AUDIT ALL BY dev BY ACCESS;
+```
+
+### 4. Backup Before Going Live
+
+```bash
+# RMAN backup
+RMAN> BACKUP DATABASE;
+
+# Or:
+expdp system/password DIRECTORY=data_pump_dir DUMPFILE=backup.dmp
+```
+
+---
+
+## Advanced: Performance Tuning
+
+### Enable HNSW Index Statistics
+
+```sql
+-- After loading data
+CONNECT dev@DEVPDB;
+
+-- Analyze the index
+EXEC DBMS_STATS.GATHER_INDEX_STATS(ownname=>'DEV', indname=>'IDX_ADC_CHUNK_EMBED');
+```
+
+### Check Index Usage
+
+```sql
+SELECT index_name, blevel, num_rows, clustering_factor
+FROM user_indexes WHERE index_name LIKE '%CHUNK%';
+```
+
+### Monitor Vector Search Performance
+
+```sql
+-- Check query plan
+EXPLAIN PLAN FOR
+SELECT * FROM aitest_documentation_chunks
+WHERE VECTOR_DISTANCE(embedding, VECTOR_EMBEDDING(...), COSINE) < 0.5
+ORDER BY VECTOR_DISTANCE(...);
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+```
+
+---
+
+## Summary Checklist
+
+- [ ] DEV user created
+- [ ] Privileges granted (CONNECT, RESOURCE, CREATE TABLE, VECTOR_EMBEDDING)
+- [ ] ONNX model verified
+- [ ] `.env` configured with correct credentials
+- [ ] Test connection: `sqlplus dev@DEVPDB`
+- [ ] Streamlit app starts: `streamlit run app.py`
+- [ ] Can log in with default admin / admin
+- [ ] Can upload documents
+- [ ] Can perform vector search
+- [ ] Changed default admin password
+
+---
+
+## Next Steps
+
+1. Run the Streamlit app
+2. Log in with `admin` / `admin`
+3. Upload sample documents
+4. Test vector search
+5. Configure RAG mode (optional)
+6. Invite team members
+7. Back up regularly
+
+---
+
+## References
+
+- [Oracle 26ai Documentation](https://docs.oracle.com/en/database/)
+- [Vector Search Guide](https://docs.oracle.com/en/database/oracle/oracle-database/26/)
+- [ONNX Models in Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/26/)
+- [Security Best Practices](https://docs.oracle.com/en/database/oracle/security-guide/)
