@@ -22,3 +22,11 @@ python-docx>=1.1.0
 # Gemini: REST fallback uses stdlib urllib too.
 #         Install the SDK only if you want richer error messages / streaming:
 google-genai>=1.0.0
+
+# ── Testing & Quality ─────────────────────────
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+mypy>=1.5.0
+ruff>=0.1.0
+pylint>=3.0.0
