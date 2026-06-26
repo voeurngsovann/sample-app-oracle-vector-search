@@ -363,57 +363,6 @@ oracle-vector-search/
 
 ---
 
-## Upload to GitHub
-
-### 1. Create a GitHub Repository
-
-1. Go to [github.com/new](https://github.com/new)
-2. Enter repo name: `oracle-vector-search`
-3. Add description: "Semantic vector search chat with Oracle 26ai & Streamlit"
-4. Choose **Public** (for sharing)
-5. Do **NOT** initialize with README (we have one)
-6. Create repository
-
-### 2. Push Your Code
-
-```bash
-# Navigate to project directory
-cd D:\App\AI\app\vector_search
-
-# Initialize git (if not already done)
-git init
-
-# Add all files
-git add .
-
-# Commit
-git commit -m "Initial commit: Oracle Vector Search Chat App"
-
-# Add remote (replace YOUR_USERNAME)
-git remote add origin https://github.com/YOUR_USERNAME/oracle-vector-search.git
-
-# Push to GitHub
-git branch -M main
-git push -u origin main
-```
-
-### 3. Update .gitignore
-
-Ensure `.gitignore` includes:
-```
-.env
-.venv/
-__pycache__/
-*.pyc
-*.egg-info/
-.DS_Store
-.vscode/
-app.log
-diag.log
-```
-
----
-
 ## Troubleshooting
 
 ### `ORA-01017: invalid username/password`
@@ -438,7 +387,7 @@ diag.log
 ### LLM (Ollama/Gemini) not responding
 - **Ollama:** Ensure server is running (`ollama serve`) and model pulled
 - **Gemini:** Verify API key is valid and has quota
-- Check `app.log` for detailed errors
+- Check `application.log` for detailed errors
 
 ---
 
@@ -497,4 +446,4 @@ For issues or questions:
 | `VECTOR_TOP_K`     | `5`                            | Default search results   |
 | `VECTOR_DISTANCE`  | `COSINE`                       | Distance metric          |
 | `Gemini_API_KEY`| —                              | Enables RAG mode         |
-| `RAG_MODEL`        | `cgemini-3-flash-preview`     | Gemini model for answers |
+| `RAG_MODEL`        | `gemini-3-flash-preview`     | Gemini model for answers |
