@@ -84,9 +84,53 @@ GRANT CONNECT, RESOURCE TO dev;
 GRANT CREATE TABLE TO dev;
 GRANT CREATE PROCEDURE TO dev;
 GRANT CREATE FUNCTION TO dev;
+GRANT db_developer_role, create mining model,dba to dev;
 
 -- Grant vector embedding privileges (Oracle 26ai)
 GRANT EXECUTE ON SYS.VECTOR_EMBEDDING TO dev;
+
+create or replace directory model_dir as '/u01/models';
+grant read, write on directory model_dir to dev;
+
+connect dev/Welcome1@AIDBPDB1
+
+-- download model 
+cd /u01/models
+#https://adwc4pm.objectstorage.us-ashburn-1.oci.customer-oci.com/p/fU1V-voY2VBhhqMPjhCC57Up77ROK9u6GN_j3-uGi_EzIdHm9XDn-RfnZS5bV0cN/n/adwc4pm/b/OML-ai-models/o/Oracle%20Machine%20Learning%20AI%20models.htm
+
+begin
+  dbms_vector.drop_onnx_model (
+    model_name => 'ALL_MINILM_L12_V2',
+    force => true);
+
+  dbms_vector.load_onnx_model (
+    directory  => 'model_dir',
+    file_name  => 'all_MiniLM_L12_v2.onnx',
+    model_name => 'ALL_MINILM_L12_V2');
+end;
+/
+CREATE SEQUENCE dev.SEQ_QUESTION_CACHE_ID 
+START WITH 1 
+INCREMENT BY 1 
+NOCACHE 
+NOCYCLE;
+
+CREATE TABLE dev.QUESTION_CACHE (
+    id              NUMBER          DEFAULT dev.SEQ_QUESTION_CACHE_ID.NEXTVAL
+                                    NOT NULL
+                                    CONSTRAINT PK_QUESTION_CACHE_ID PRIMARY KEY,
+    user_id         NUMBER          NOT NULL,
+    question        VARCHAR2(4000)  NOT NULL,
+    answer          CLOB            NOT NULL,
+    response_time   NUMBER,
+    created_at      TIMESTAMP       DEFAULT SYSTIMESTAMP,
+    CONSTRAINT FK_QUESTION_CACHE_USER FOREIGN KEY (user_id)
+        REFERENCES dev.VS_APP_USERS(id) ON DELETE CASCADE
+);
+
+
+
+CREATE INDEX dev.IDX_QUESTION_CACHE_USER_Q ON dev.QUESTION_CACHE(user_id, question);
 
 -- Create application user (for login)
 -- This is done automatically by the app on first run
