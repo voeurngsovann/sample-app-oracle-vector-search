@@ -452,5 +452,5 @@ For issues or questions:
 | `ORA_ONNX_MODEL`   | `ALL_MINILM_L12_V2`            | ONNX model name in DB    |
 | `VECTOR_TOP_K`     | `5`                            | Default search results   |
 | `VECTOR_DISTANCE`  | `COSINE`                       | Distance metric          |
-| `ANTHROPIC_API_KEY`| —                              | Enables RAG mode         |
-| `RAG_MODEL`        | `claude-sonnet-4-20250514`     | Claude model for answers |
+| `Gemini_API_KEY`| —                              | Enables RAG mode         |
+| `RAG_MODEL`        | `cgemini-3-flash-preview`     | Gemini model for answers |
