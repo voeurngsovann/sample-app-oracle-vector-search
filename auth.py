@@ -15,8 +15,10 @@ import oracledb
 
 logger = logging.getLogger(__name__)
 
+from config import config
+
 # Table lives in the same schema as the rest of the app
-_SCHEMA   = os.environ.get("ORA_SCHEMA", "DEV").upper()
+_SCHEMA   = config.schema
 _APP_USERS = f"{_SCHEMA}.VS_APP_USERS"
 
 
@@ -24,7 +26,7 @@ _APP_USERS = f"{_SCHEMA}.VS_APP_USERS"
 #  Password hashing  (PBKDF2-HMAC-SHA256 via stdlib)
 #  No bcrypt dependency — works out of the box on Python 3.14
 # ─────────────────────────────────────────────────────────
-_ITERATIONS = 260_000   # OWASP 2024 recommendation for PBKDF2-SHA256
+_ITERATIONS = config.auth_pbkdf2_iterations   # OWASP 2024 recommendation for PBKDF2-SHA256
 
 def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
     """Return (hashed_hex, salt_hex). Generate salt if not provided."""

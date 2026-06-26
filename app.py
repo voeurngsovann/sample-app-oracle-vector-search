@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # ─── logging ──────────────────────────────────────────────────────────────────
-_log_file        = os.path.join(os.path.dirname(__file__), "app.log")
+_log_file        = os.path.join(os.path.dirname(__file__), "application.log")
 _handler_file    = logging.FileHandler(_log_file, encoding="utf-8")
 _handler_console = logging.StreamHandler()
 _handler_file.setLevel(logging.DEBUG)
@@ -493,6 +493,55 @@ hr { border-color: var(--rim) !important; margin: 12px 0 !important; }
 .empty-title { font-family:var(--font-display) !important; font-size:1.1rem; font-weight:600; color:var(--text2); margin-bottom:6px; }
 .empty-sub   { font-size:.8rem; color:var(--text3); }
 
+/* ── chat action bar ── */
+.chat-action-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--rim);
+    margin-top: 8px;
+}
+.msg-count {
+    font-family: var(--font-display) !important;
+    font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--text3); flex: 1;
+}
+
+/* clear button — red tint */
+.clear-btn [data-testid="stButton"] button {
+    background: transparent !important;
+    color: var(--red) !important;
+    border: 1px solid rgba(255,77,106,.22) !important;
+    font-size: .75rem !important;
+    padding: 4px 14px !important;
+    border-radius: 20px !important;
+    transition: all .15s !important;
+}
+.clear-btn [data-testid="stButton"] button:hover {
+    background: rgba(255,77,106,.08) !important;
+    border-color: var(--red) !important;
+    transform: none !important;
+}
+
+/* search button — cyan accent */
+.search-btn [data-testid="stButton"] button {
+    background: var(--cyan) !important;
+    color: var(--abyss) !important;
+    border: none !important;
+    font-family: var(--font-display) !important;
+    font-weight: 700 !important;
+    font-size: .75rem !important;
+    letter-spacing: .06em !important;
+    text-transform: uppercase !important;
+    padding: 4px 18px !important;
+    border-radius: 20px !important;
+    transition: all .2s ease !important;
+}
+.search-btn [data-testid="stButton"] button:hover {
+    background: #00ffe8 !important;
+    box-shadow: 0 0 16px var(--cyan-glow) !important;
+    transform: translateY(-1px) !important;
+}
+
 @media (max-width: 640px) {
     .chat-bubble { max-width: 88%; font-size: .82rem; }
     .topbar { flex-direction: column; align-items: flex-start; }
@@ -628,7 +677,7 @@ def do_logout():
     st.rerun()
 
 
-def render_message(role: str, content: str, chunks: list[dict] | None = None):
+def render_message(role: str, content: str, chunks: list[dict] | None = None, response_time: float | None = None):
     avatar     = "👤" if role == "user" else "◈"
     bubble_cls = "user" if role == "user" else "ai"
     row_cls    = "user" if role == "user" else ""
@@ -637,6 +686,8 @@ def render_message(role: str, content: str, chunks: list[dict] | None = None):
             <div class="chat-ava {bubble_cls}">{avatar}</div>
             <div class="chat-bubble {bubble_cls}">{content}</div>
         </div>""", unsafe_allow_html=True)
+    if role == "assistant" and response_time is not None:
+        st.markdown(f'<div style="font-size:.75rem;color:var(--text3);margin-top:-12px;margin-bottom:8px">⏱ {response_time:.2f}s</div>', unsafe_allow_html=True)
     if chunks:
         with st.expander(f"◈ {len(chunks)} source chunk(s)", expanded=False):
             for c in chunks:
@@ -762,7 +813,7 @@ def render_app():
         st.markdown('<div class="sec-label">Upload Documents</div>', unsafe_allow_html=True)
         uploaded_files = st.file_uploader(
             "drop", accept_multiple_files=True,
-            type=["pdf", "docx", "txt", "md"],
+            type=["pdf", "docx", "txt", "md", "csv"],
             label_visibility="collapsed",
         )
         chunk_size = st.slider("Chunk size (words)", 100, 1000, 500, step=50)
@@ -803,8 +854,6 @@ def render_app():
                     with c2:
                         if st.button("✕", key=f"del_{doc['id']}", help="Delete"):
                             db.delete_document(doc["id"])
-                            st.success(f"Deleted {doc['id']}") # Visual confirmation
-                            st.cache_data.clear()
                             st.rerun()
             else:
                 st.caption("No documents yet.")
@@ -819,17 +868,49 @@ def render_app():
           <div class="empty-sub">Upload documents in the sidebar, then ask anything below.</div>
         </div>
         """, unsafe_allow_html=True)
+    else:
+        # ── action bar above messages ─────────────────────────────────────────
+        msg_count = len([m for m in st.session_state.messages if m["role"] == "user"])
+        col_count, col_spacer, col_clear = st.columns([3, 6, 2])
+        with col_count:
+            st.markdown(
+                f'<div class="msg-count">{msg_count} question{"s" if msg_count != 1 else ""}</div>',
+                unsafe_allow_html=True,
+            )
+        with col_clear:
+            st.markdown('<div class="clear-btn">', unsafe_allow_html=True)
+            if st.button("🗑  Clear", key="clear_messages", help="Clear all messages"):
+                st.session_state.messages = []
+                logger.info("Chat history cleared by %s", user["username"])
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
     for msg in st.session_state.messages:
-        render_message(msg["role"], msg["content"], msg.get("chunks"))
+        render_message(msg["role"], msg["content"], msg.get("chunks"), msg.get("response_time"))
 
-    if prompt := st.chat_input("Ask anything about your documents …"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        render_message("user", prompt)
+    # ── chat input + search button ──────────────────────────────────────────────
+    prompt = st.chat_input("Ask anything … (press Enter to search)")
+    st.markdown('<div style="display:flex;gap:8px;margin-top:8px">', unsafe_allow_html=True)
+    col_search, col_spacer = st.columns([1, 9])
+    with col_search:
+        search_clicked = st.button("◈ Search", key="search_btn", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
+    # trigger on chat_input Enter OR Search button click
+    query = prompt or (st.session_state.get("_last_prompt") if search_clicked else None)
+    if search_clicked and not st.session_state.get("_last_prompt"):
+        st.warning("Type a question first.", icon="⚠️")
+        query = None
+
+    if query:
+        st.session_state["_last_prompt"] = query
+        st.session_state.messages.append({"role": "user", "content": query})
+        render_message("user", query)
+
+        start_time = time.time()
         with st.spinner("Searching knowledge base …"):
             try:
-                chunks = db.vector_search(prompt, top_k=top_k, distance=distance_metric)
+                chunks = db.vector_search(query, top_k=top_k, distance=distance_metric)
             except Exception as e:
                 st.error(f"Vector search failed: {e}")
                 logger.exception("Vector search error")
@@ -839,7 +920,7 @@ def render_app():
             with st.spinner(f"Generating answer with {selected_model} …"):
                 try:
                     from rag import generate_answer
-                    answer = generate_answer(prompt, chunks, model=selected_model)
+                    answer = generate_answer(query, chunks, model=selected_model)
                 except Exception as e:
                     answer = f"RAG error: {e}"
                     logger.exception("RAG error")
@@ -855,10 +936,11 @@ def render_app():
             else:
                 answer = "No matching chunks found in the knowledge base."
 
+        response_time = round(time.time() - start_time, 2)
         st.session_state.messages.append(
-            {"role": "assistant", "content": answer, "chunks": chunks}
+            {"role": "assistant", "content": answer, "chunks": chunks, "response_time": response_time}
         )
-        render_message("assistant", answer, chunks)
+        render_message("assistant", answer, chunks, response_time)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

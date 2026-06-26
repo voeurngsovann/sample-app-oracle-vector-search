@@ -257,7 +257,7 @@ def ensure_question_cache_table() -> None:
                     response_time   NUMBER,
                     created_at      TIMESTAMP       DEFAULT SYSTIMESTAMP,
                     CONSTRAINT FK_{cache_table}_USER FOREIGN KEY (user_id)
-                        REFERENCES {cfg.schema}.VS_APP_USERS(id) ON DELETE CASCADE
+                        REFERENCES {cfg.schema}.APP_USERS(id) ON DELETE CASCADE
                 )
             """)
             logger.info("Created table %s.%s", cfg.schema, cache_table)

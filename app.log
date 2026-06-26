@@ -1,8 +1,0 @@
-2026-05-23 11:05:14,930  INFO      __main__  App started  |  log=D:\App\AI\app\vector_search\app.log
-2026-05-23 11:07:22,702  INFO      __main__  App started  |  log=D:\App\AI\app\vector_search\app.log
-2026-05-23 11:07:41,487  INFO      __main__  App started  |  log=D:\App\AI\app\vector_search\app.log
-2026-05-23 11:07:41,797  INFO      db  Oracle connection pool created  dsn=10.118.200.201:1521/aipdb1  user=dev
-2026-05-23 11:07:42,155  INFO      auth  Login success: admin
-2026-05-23 11:07:42,208  INFO      __main__  App started  |  log=D:\App\AI\app\vector_search\app.log
-2026-05-23 11:08:10,200  INFO      __main__  App started  |  log=D:\App\AI\app\vector_search\app.log
-2026-05-23 11:08:21,000  INFO      __main__  App started  |  log=D:\App\AI\app\vector_search\app.log

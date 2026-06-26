@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import urllib.request
 import urllib.error
+
+from config import config
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +24,15 @@ logger = logging.getLogger(__name__)
 #  Config — all from environment, zero hardcoding
 # ─────────────────────────────────────────────────────────────────────────────
 def _provider() -> str:
-    return os.environ.get("LLM_PROVIDER", "ollama").lower().strip()
+    return config.llm_provider
 
 # Ollama
-_OLLAMA_BASE = lambda: os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/api").rstrip("/")
-_OLLAMA_MODEL = lambda: os.environ.get("OLLAMA_MODEL", "gemma4:e4b")
+_OLLAMA_BASE = lambda: config.ollama_base_url
+_OLLAMA_MODEL = lambda: config.ollama_model
 
 # Gemini
-_GEMINI_API_KEY   = lambda: os.environ.get("GEMINI_API_KEY", "")
-_GEMINI_MODEL     = lambda: os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
+_GEMINI_API_KEY   = lambda: config.gemini_api_key
+_GEMINI_MODEL     = lambda: config.gemini_model
 _GEMINI_API_BASE  = "https://generativelanguage.googleapis.com/v1beta"
 
 # gemma4 chain-of-thought
@@ -56,6 +57,7 @@ def _system_prompt(model: str = "") -> str:
         "Answer the user's question using ONLY the context provided below. "
         "If the context does not contain enough information, say so clearly. "
         "Be concise and cite relevant chunk numbers when appropriate."
+        "Provided the full statement with meaning ,do not leave it unclear sentence"
     )
 
 
@@ -106,7 +108,7 @@ def _ollama_generate(query: str, chunks: list[dict], model: str) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=80) as r:
+        with urllib.request.urlopen(req, timeout=300) as r:
             content = json.loads(r.read())["message"]["content"]
             return _strip_thinking(content) if model.startswith("gemma4") else content
     except urllib.error.URLError as e:
@@ -160,8 +162,8 @@ def _gemini_generate(query: str, chunks: list[dict], model: str) -> str:
         f"Question: {query}"
     )
     gen_cfg = {
-        "temperature":       float(os.environ.get("GEMINI_TEMPERATURE", "0.7")),
-        "max_output_tokens": int(os.environ.get("GEMINI_MAX_TOKENS",    "1024")),
+        "temperature":       config.gemini_temperature,
+        "max_output_tokens": config.gemini_max_tokens,
     }
 
     # ── current SDK: google-genai (google.genai) ──────────────────────────────

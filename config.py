@@ -37,17 +37,24 @@ class AppConfig:
     vector_distance: str = os.environ.get("VECTOR_DISTANCE", "COSINE").upper()
     
     # ─── LLM Provider Settings ──────────────────────────────────────────────
-    llm_provider: str = os.environ.get("LLM_PROVIDER", "ollama").lower().strip()
-    
+    # NOTE: llm_provider is intentionally NOT a dataclass field — it must be
+    # read dynamically from os.environ so runtime switches from the UI take
+    # effect immediately. All other LLM settings are fixed at startup.
+
     # Ollama
     ollama_base_url: str = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/api").rstrip("/")
     ollama_model: str = os.environ.get("OLLAMA_MODEL", "gemma4:e4b")
-    
+
     # Gemini
     gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "")
     gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
     gemini_temperature: float = float(os.environ.get("GEMINI_TEMPERATURE", "0.7"))
     gemini_max_tokens: int = int(os.environ.get("GEMINI_MAX_TOKENS", "1024"))
+
+    @property
+    def llm_provider(self) -> str:
+        """Read LLM_PROVIDER from env on every call so UI switches take effect instantly."""
+        return os.environ.get("LLM_PROVIDER", "ollama").lower().strip()
     
     # ─── Streamlit Settings ─────────────────────────────────────────────────
     streamlit_page_title: str = "VectorSearch · Oracle 26ai"
@@ -77,6 +84,85 @@ class AppConfig:
         """Fully qualified ONNX model name."""
         return f"{self.ora_schema}.{self.ora_onnx_model}"
     
+    @property
+    def ora_pk_chunk(self) -> str:
+        """Primary key constraint name for chunk table."""
+        return f"PK_{self.ora_chunk_table[:20]}"
+    
+    @property
+    def ora_fk_chunk_doc(self) -> str:
+        """Foreign key constraint name for chunk->doc relationship."""
+        return f"FK_{self.ora_chunk_table[:15]}_DOC"
+
+    # Backwards-compatible aliases for existing code that expects `cfg` names
+    @property
+    def user(self) -> str:
+        return self.ora_user
+
+    @property
+    def password(self) -> str:
+        return self.ora_password
+
+    @property
+    def host(self) -> str:
+        return self.ora_host
+
+    @property
+    def port(self) -> int:
+        return self.ora_port
+
+    @property
+    def service(self) -> str:
+        return self.ora_service
+
+    @property
+    def schema(self) -> str:
+        return self.ora_schema
+
+    @property
+    def doc_table(self) -> str:
+        return self.ora_doc_table
+
+    @property
+    def chunk_table(self) -> str:
+        return self.ora_chunk_table
+
+    @property
+    def onnx_model(self) -> str:
+        return self.ora_onnx_model
+
+    @property
+    def fq_doc_table(self) -> str:
+        return self.ora_fq_doc_table
+
+    @property
+    def fq_chunk_table(self) -> str:
+        return self.ora_fq_chunk_table
+
+    @property
+    def fq_onnx_model(self) -> str:
+        return self.ora_fq_onnx_model
+
+    @property
+    def pk_chunk(self) -> str:
+        return self.ora_pk_chunk
+
+    @property
+    def fk_chunk_doc(self) -> str:
+        return self.ora_fk_chunk_doc
+
+    @property
+    def dsn(self) -> str:
+        return self.ora_dsn
+
+    @property
+    def top_k(self) -> int:
+        return self.vector_top_k
+
+    @property
+    def distance(self) -> str:
+        return self.vector_distance
+    
     def validate(self) -> tuple[bool, list[str]]:
         """
         Validate critical configuration values.
@@ -96,9 +182,11 @@ class AppConfig:
         if self.vector_top_k <= 0:
             errors.append(f"VECTOR_TOP_K must be > 0, got {self.vector_top_k}")
         
-        # LLM settings
-        if self.llm_provider == "gemini" and not self.gemini_api_key:
-            errors.append("GEMINI_API_KEY required when LLM_PROVIDER=gemini")
+        # LLM settings — only warn, never block startup
+        # Both providers can be configured simultaneously; the active one
+        # is chosen at runtime via the UI, not at startup.
+        if self.gemini_api_key and not self.gemini_model:
+            errors.append("GEMINI_MODEL must be set when GEMINI_API_KEY is provided")
         
         return len(errors) == 0, errors
 
