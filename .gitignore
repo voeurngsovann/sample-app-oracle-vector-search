@@ -11,3 +11,35 @@ __pycache__/
 
 # Streamlit cache
 .streamlit/
+
+# Logs — contain sensitive database info
+*.log
+application.log
+diag.log
+
+# Backup and temporary files
+*.bak
+*.tmp
+*.sql.bak
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
