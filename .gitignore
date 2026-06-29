@@ -42,8 +42,4 @@ htmlcov/
 # Database
 *.db
 *.sqlite
-<<<<<<< HEAD
 *.sqlite3
-=======
-*.sqlite3
->>>>>>> 864d6981eddcbf0f4cb5ac746049c95e51df9a83
